@@ -34,16 +34,22 @@ You wake up fresh each session. Files are your continuity:
 
 ## Skills
 
-Skills provide your tools. When you need one, check its `SKILL.md` in `skills/`:
+Manager 根据你的职责为你配置了相应的 skills。运行以下命令查看你的可用 skills：
 
-- **file-sync** — Sync files with centralized storage when notified of updates
-- **github-operations** — Perform GitHub operations (repos, PRs, issues) via MCP Server
+```bash
+ls ~/hiclaw-fs/agents/<your-name>/skills/
+```
 
-Additional skills may be added by the Manager over time.
+每个 skill 目录下有 `SKILL.md`，说明使用方式。
+
+默认 skill：
+- **file-sync** — 当 Manager 通知文件有更新时，从集中存储同步文件
+
+Manager 可以随时为你增加或更新 skills，届时会通过 @mention 通知你执行 file-sync。
 
 ### MCP Tools (mcporter)
 
-If `mcporter-servers.json` exists in your workspace, you can call MCP Server tools via `mcporter` CLI. See `skills/github-operations/SKILL.md` for usage patterns.
+If `mcporter-servers.json` exists in your workspace, you can call MCP Server tools via `mcporter` CLI. See the relevant skill's `SKILL.md` for usage patterns.
 
 ## Communication
 

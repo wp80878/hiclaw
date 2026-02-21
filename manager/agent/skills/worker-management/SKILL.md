@@ -25,22 +25,22 @@ EOF
 
 ### Step 2: Run create-worker script
 
-The script handles everything: Matrix registration, room creation, Higress consumer, AI/MCP authorization, config generation, MinIO sync, and container startup.
+The script handles everything: Matrix registration, room creation, Higress consumer, AI/MCP authorization, config generation, MinIO sync, skills push, and container startup.
 
 ```bash
-bash /opt/hiclaw/agent/skills/worker-management/scripts/create-worker.sh --name <WORKER_NAME> [--model <MODEL_ID>] [--mcp-servers s1,s2] [--remote]
+bash /opt/hiclaw/agent/skills/worker-management/scripts/create-worker.sh --name <WORKER_NAME> [--model <MODEL_ID>] [--mcp-servers s1,s2] [--skills s1,s2] [--remote]
 ```
 
 **Parameters**:
 - `--name` (required): Worker name
 - `--model`: optional, bare model name (e.g. `qwen3.5-plus`). Defaults to `${HICLAW_DEFAULT_MODEL}`
 - `--mcp-servers`: optional, comma-separated MCP server names. Defaults to all existing MCP servers
+- `--skills`: optional, comma-separated skill names (e.g. `file-sync,github-operations`). Defaults to `file-sync`. `file-sync` is always included automatically
 - `--remote`: force output install command instead of starting container locally
 
 **Deployment behavior** (without `--remote`):
 - If container socket is available: auto-starts Worker container locally
-
-、÷- If no socket: falls back to outputting install command
+- If no socket: falls back to outputting install command
 
 The script outputs a JSON result after `---RESULT---`:
 
@@ -50,6 +50,7 @@ The script outputs a JSON result after `---RESULT---`:
   "matrix_user_id": "@xiaozhang:matrix-local.hiclaw.io:8080",
   "room_id": "!abc:matrix-local.hiclaw.io:8080",
   "consumer": "worker-xiaozhang",
+  "skills": ["file-sync", "github-operations"],
   "mode": "local",
   "container_id": "abc123...",
   "status": "started"
@@ -121,9 +122,76 @@ See `higress-gateway-management` SKILL.md for the exact API calls.
 4. Delete Worker's config directory: `rm -rf ~/hiclaw-fs/agents/<WORKER_NAME>/`
 5. Re-create: write a new SOUL.md and run `create-worker.sh` again (the script handles re-registration gracefully)
 
+## Manage Worker Skills
+
+Manager centrally manages all Worker skills. The canonical skill definitions live in `~/hiclaw-fs/agents/manager/worker-skills/` (on disk: `/opt/hiclaw/agent/worker-skills/`). Worker skill assignments are tracked in `~/hiclaw-fs/agents/manager/workers-registry.json`.
+
+### workers-registry.json
+
+Location: `~/hiclaw-fs/agents/manager/workers-registry.json`
+
+Format:
+```json
+{
+  "version": 1,
+  "updated_at": "2026-01-01T00:00:00Z",
+  "workers": {
+    "<worker-name>": {
+      "matrix_user_id": "@<name>:<domain>",
+      "room_id": "!xxx:<domain>",
+      "skills": ["file-sync", "github-operations"],
+      "created_at": "2026-01-01T00:00:00Z",
+      "skills_updated_at": "2026-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+`file-sync` is the bootstrap skill (image-managed) and is always included.
+
+### worker-skills/ Directory Structure
+
+```
+/opt/hiclaw/agent/worker-skills/
+├── README.md
+└── github-operations/
+    └── SKILL.md
+```
+
+To add a new skill, create a new directory here with a `SKILL.md` and optional `scripts/`.
+
+### push-worker-skills.sh
+
+```bash
+# Push all skills for a specific worker
+bash /opt/hiclaw/agent/skills/worker-management/scripts/push-worker-skills.sh --worker <name>
+
+# Push a skill to all workers that have it (e.g., after updating the skill definition)
+bash /opt/hiclaw/agent/skills/worker-management/scripts/push-worker-skills.sh --skill <skill-name>
+
+# Add a new skill to a worker and push it
+bash /opt/hiclaw/agent/skills/worker-management/scripts/push-worker-skills.sh --worker <name> --add-skill <skill-name>
+
+# Remove a skill from a worker (updates registry; skill files remain in MinIO until manually removed)
+bash /opt/hiclaw/agent/skills/worker-management/scripts/push-worker-skills.sh --worker <name> --remove-skill <skill-name>
+
+# Skip Matrix notification (e.g., when worker is not yet running)
+bash /opt/hiclaw/agent/skills/worker-management/scripts/push-worker-skills.sh --worker <name> --no-notify
+```
+
+After pushing skills, the script notifies the affected Worker(s) via Matrix @mention to run `hiclaw-sync`. Workers' periodic 5-minute sync also serves as a fallback.
+
+### How to Add a New Custom Skill
+
+1. Create the skill directory under `/opt/hiclaw/agent/worker-skills/<skill-name>/`
+2. Write `SKILL.md` describing the skill
+3. Rebuild the Manager image, or manually copy to `~/hiclaw-fs/agents/manager/worker-skills/<skill-name>/` and sync to MinIO
+4. Assign to workers: `push-worker-skills.sh --worker <name> --add-skill <skill-name>`
+
 ## Important Notes
 
 - Workers are **stateless containers** -- all state is in MinIO. Resetting a Worker just means recreating its config files
 - Worker Matrix accounts persist in Tuwunel (cannot be deleted via API). Reuse same username on reset
 - OpenClaw config hot-reload: file-watch (~300ms) or `config.patch` API
 - **File sync**: after writing any file that a Worker (or another Worker) needs to read, always notify the target Worker via Matrix to run `hiclaw-sync`. This applies to config updates, credential rotation, task briefs, shared data, and cross-Worker collaboration artifacts. Workers have a `file-sync` skill for this. Background periodic sync (every 5 minutes) serves as fallback only
+- **Skills are Manager-controlled**: Workers cannot modify their own skills (local→remote sync excludes `skills/**`). Only Manager can push skill changes via `push-worker-skills.sh`

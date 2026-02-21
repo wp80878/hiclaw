@@ -3,10 +3,10 @@
 #
 # Automates the full Worker lifecycle: Matrix registration, room creation,
 # Higress consumer setup, AI route & MCP authorization, config generation,
-# MinIO sync, and container startup.
+# MinIO sync, skills push, and container startup.
 #
 # Usage:
-#   create-worker.sh --name <NAME> [--model <MODEL_ID>] [--mcp-servers s1,s2] [--remote]
+#   create-worker.sh --name <NAME> [--model <MODEL_ID>] [--mcp-servers s1,s2] [--skills s1,s2] [--remote]
 #
 # Prerequisites:
 #   - SOUL.md must already exist at ~/hiclaw-fs/agents/<NAME>/SOUL.md
@@ -23,6 +23,7 @@ source /opt/hiclaw/scripts/lib/base.sh
 WORKER_NAME=""
 MODEL_ID=""
 MCP_SERVERS=""
+WORKER_SKILLS="file-sync"
 REMOTE_MODE=false
 
 while [ $# -gt 0 ]; do
@@ -30,13 +31,14 @@ while [ $# -gt 0 ]; do
         --name)       WORKER_NAME="$2"; shift 2 ;;
         --model)      MODEL_ID="$2"; shift 2 ;;
         --mcp-servers) MCP_SERVERS="$2"; shift 2 ;;
+        --skills)     WORKER_SKILLS="$2"; shift 2 ;;
         --remote)     REMOTE_MODE=true; shift ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
 if [ -z "${WORKER_NAME}" ]; then
-    echo "Usage: create-worker.sh --name <NAME> [--model <MODEL_ID>] [--mcp-servers s1,s2] [--remote]"
+    echo "Usage: create-worker.sh --name <NAME> [--model <MODEL_ID>] [--mcp-servers s1,s2] [--skills s1,s2] [--remote]"
     exit 1
 fi
 
@@ -358,6 +360,64 @@ mc stat "hiclaw/hiclaw-storage/agents/${WORKER_NAME}/openclaw.json" > /dev/null 
 log "  MinIO sync verified"
 
 # ============================================================
+# Step 8.5: Update workers-registry.json and push skills
+# ============================================================
+log "Step 8.5: Updating workers-registry and pushing skills..."
+REGISTRY_FILE="${HOME}/hiclaw-fs/agents/manager/workers-registry.json"
+
+# Ensure registry file exists
+if [ ! -f "${REGISTRY_FILE}" ]; then
+    log "  Initializing workers-registry.json..."
+    echo '{"version":1,"updated_at":"","workers":{}}' > "${REGISTRY_FILE}"
+fi
+
+# Build skills JSON array from WORKER_SKILLS (comma-separated)
+SKILLS_JSON="["
+FIRST_SKILL=true
+# Ensure file-sync is always included
+SKILLS_WITH_FILESYNC="${WORKER_SKILLS}"
+if ! echo "${SKILLS_WITH_FILESYNC}" | grep -q '\bfile-sync\b'; then
+    SKILLS_WITH_FILESYNC="file-sync,${SKILLS_WITH_FILESYNC}"
+fi
+IFS=',' read -ra SKILL_ARR <<< "${SKILLS_WITH_FILESYNC}"
+for skill in "${SKILL_ARR[@]}"; do
+    skill=$(echo "${skill}" | tr -d ' ')
+    [ -z "${skill}" ] && continue
+    if [ "${FIRST_SKILL}" = true ]; then FIRST_SKILL=false; else SKILLS_JSON="${SKILLS_JSON},"; fi
+    SKILLS_JSON="${SKILLS_JSON}\"${skill}\""
+done
+SKILLS_JSON="${SKILLS_JSON}]"
+
+# Upsert worker entry into registry
+NOW_TS=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+WORKER_MATRIX_USER_ID="@${WORKER_NAME}:${MATRIX_DOMAIN}"
+
+jq --arg w "${WORKER_NAME}" \
+   --arg uid "${WORKER_MATRIX_USER_ID}" \
+   --arg rid "${ROOM_ID}" \
+   --arg ts "${NOW_TS}" \
+   --argjson skills "${SKILLS_JSON}" \
+   '.workers[$w] = {
+     "matrix_user_id": $uid,
+     "room_id": $rid,
+     "skills": $skills,
+     "created_at": (if .workers[$w].created_at? then .workers[$w].created_at else $ts end),
+     "skills_updated_at": $ts
+   } | .updated_at = $ts' \
+   "${REGISTRY_FILE}" > /tmp/workers-registry-updated.json
+mv /tmp/workers-registry-updated.json "${REGISTRY_FILE}"
+
+# Sync registry to MinIO
+mc cp "${REGISTRY_FILE}" "hiclaw/hiclaw-storage/agents/manager/workers-registry.json" > /dev/null 2>&1 \
+    || log "  WARNING: Failed to sync registry to MinIO"
+log "  Registry updated for ${WORKER_NAME}: skills=${SKILLS_WITH_FILESYNC}"
+
+# Push non-file-sync skills to worker's MinIO workspace (Worker not yet started, no notification)
+bash /opt/hiclaw/agent/skills/worker-management/scripts/push-worker-skills.sh \
+    --worker "${WORKER_NAME}" --no-notify \
+    || log "  WARNING: push-worker-skills.sh returned non-zero (non-fatal)"
+
+# ============================================================
 # Step 9: Start Worker
 # ============================================================
 DEPLOY_MODE="remote"
@@ -409,11 +469,13 @@ RESULT=$(jq -n \
     --arg container_id "${CONTAINER_ID}" \
     --arg status "$([ "${DEPLOY_MODE}" = "local" ] && echo "started" || echo "pending_install")" \
     --arg install_cmd "${INSTALL_CMD:-}" \
+    --argjson skills "${SKILLS_JSON}" \
     '{
         worker_name: $name,
         matrix_user_id: $user_id,
         room_id: $room_id,
         consumer: $consumer,
+        skills: $skills,
         mode: $mode,
         container_id: $container_id,
         status: $status,

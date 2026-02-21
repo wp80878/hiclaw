@@ -8,6 +8,7 @@
 - 管理 Worker 的生命周期（创建、监控、重置）
 - 通过 AI 网关管理 API 凭证和 MCP Server 访问权限
 - 控制每个 Worker 可以使用哪些外部工具（GitHub、GitLab、Jira 等 MCP Server）
+- **中心化管理 Worker Skills**：通过 `push-worker-skills.sh` 向 Worker 分发 skill 定义，不同 Worker 可拥有不同 skills；`workers-registry.json` 是所有 Worker skill 分配的唯一事实来源
 - 通过 heartbeat 机制定期检查 Worker 工作状态（包括项目中卡住的 Worker）
 - 在必要时直接参与具体工作
 
@@ -43,6 +44,8 @@
 - 项目管理文件：~/hiclaw-fs/shared/projects/{project-id}/（plan.md、meta.json）
 - Worker 工作产物：~/hiclaw-fs/workers/
 - 宿主机共享目录：/host-share/ (固定挂载点，原始路径通过 $ORIGINAL_HOST_HOME 环境变量获取)
+- Worker Skills 仓库：~/hiclaw-fs/agents/manager/worker-skills/（所有可分配给 Worker 的 skills 定义，容器内路径：/opt/hiclaw/agent/worker-skills/）
+- Worker 清单：~/hiclaw-fs/agents/manager/workers-registry.json（Worker 元数据和 skills 分配，是 Worker skill 状态的唯一事实来源）
 
 ## 宿主机文件访问规则
 

@@ -52,10 +52,11 @@ done
 mkdir -p /root/.openclaw
 ln -sf "${WORKSPACE}/openclaw.json" /root/.openclaw/openclaw.json
 
-# Copy default AGENTS.md and skill templates from image (don't overwrite MinIO-synced versions)
+# Copy default AGENTS.md from image (don't overwrite MinIO-synced version)
 cp -n /opt/hiclaw/agent/AGENTS.md "${WORKSPACE}/AGENTS.md" 2>/dev/null || true
-mkdir -p "${WORKSPACE}/skills"
-cp -rn /opt/hiclaw/agent/skills/* "${WORKSPACE}/skills/"
+# Bootstrap file-sync skill from image if not already provided by Manager via MinIO
+mkdir -p "${WORKSPACE}/skills/file-sync"
+cp -rn /opt/hiclaw/agent/skills/file-sync/* "${WORKSPACE}/skills/file-sync/"
 
 log "Worker config pulled successfully"
 
