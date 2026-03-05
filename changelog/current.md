@@ -5,3 +5,5 @@ Record image-affecting changes to `manager/`, `worker/`, `openclaw-base/` here b
 ---
 
 - fix(manager): wait for Tuwunel via `/_tuwunel/server_version` in start-manager-agent.sh; add explicit Matrix ready check in install scripts before sending welcome message
+- feat(manager): add "Sending Files to Admin" constraint to TOOLS.md — upload to Matrix media server and reply with `MEDIA: <mxc://...>` format
+- feat(manager): add "Upload a File (Media Upload)" section to matrix-server-management SKILL.md with full curl examples

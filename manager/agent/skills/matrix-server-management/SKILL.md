@@ -1,6 +1,6 @@
 ---
 name: matrix-server-management
-description: Manage the Tuwunel Matrix Homeserver (register users, create rooms, manage room membership). Use only for explicit standalone admin requests — Worker and project creation handle Matrix operations internally via their own scripts.
+description: Manage the Tuwunel Matrix Homeserver (register users, create rooms, manage room membership, upload files to media server). Use only for explicit standalone admin requests — Worker and project creation handle Matrix operations internally via their own scripts. Also use this skill whenever you need to send a file to the admin (upload via media API, then send as m.file message).
 ---
 
 # Matrix Server Management
@@ -135,6 +135,42 @@ curl -X PUT "http://127.0.0.1:6167/_matrix/client/v3/rooms/<ROOM_ID>/send/m.room
 - The user ID in the body text and in `m.mentions.user_ids` must match exactly
 - Without `m.mentions`, Workers will receive the message but will NOT process it (it will be ignored)
 - This follows Matrix MSC3952 (Intentional Mentions) specification
+
+### Upload a File (Media Upload)
+
+Use this to send files to the admin — task output artifacts, generated reports, config exports, log files, etc.
+
+```bash
+curl -X POST "http://127.0.0.1:6167/_matrix/media/v3/upload?filename=<FILENAME>" \
+  -H "Authorization: Bearer ${MANAGER_TOKEN}" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @/path/to/file
+```
+
+Response: `{"content_uri": "mxc://<SERVER>/<MEDIA_ID>"}`
+
+After uploading, send the `mxc://` URI to the admin as a Matrix message using the `m.file` (or `m.image` / `m.text`) msgtype:
+
+```bash
+curl -X PUT "http://127.0.0.1:6167/_matrix/client/v3/rooms/<ROOM_ID>/send/m.room.message/$(date +%s)" \
+  -H "Authorization: Bearer ${MANAGER_TOKEN}" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "msgtype": "m.file",
+    "body": "<FILENAME>",
+    "url": "mxc://<SERVER>/<MEDIA_ID>"
+  }'
+```
+
+Then reply in the conversation with:
+
+```
+MEDIA: mxc://<SERVER>/<MEDIA_ID>
+```
+
+**Notes:**
+- Use `Content-Type: text/plain` for plain text files, `application/octet-stream` as a safe fallback for any binary
+- The `mxc://` URI is permanent and accessible to all room members via the Matrix client (Element Web)
 
 ### List Joined Rooms
 

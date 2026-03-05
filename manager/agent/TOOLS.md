@@ -77,6 +77,7 @@ Direct Matrix homeserver operations (Worker/project creation use dedicated scrip
 
 - Admin says "create a room for X", "invite Y to the project room"
 - Admin says "register a Matrix account for my colleague"
+- Admin asks you to send a file (task output, report, any artifact) → upload via media API, send as `m.file` message, reply with `MEDIA: <mxc://...>`
 
 ## mcp-server-management
 
