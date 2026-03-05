@@ -5,6 +5,7 @@
 - [Cannot connect to Matrix server locally](#cannot-connect-to-matrix-server-locally)
 - [How to talk to a Worker directly](#how-to-talk-to-a-worker-directly)
 - [How to switch the Manager's model](#how-to-switch-the-managers-model)
+- [How to switch a Worker's model](#how-to-switch-a-workers-model)
 
 ---
 
@@ -83,3 +84,15 @@ In the Higress console, configure the `default-ai-route` route to point to your 
 **Multiple providers**
 
 In the Higress console, configure routing rules on `default-ai-route` so that different model name prefixes or regex patterns map to the corresponding provider. After that, the process is the same as the single-provider case — just tell Manager the model name and it handles the rest.
+
+---
+
+## How to switch a Worker's model
+
+The process is similar to switching the Manager's model, and Manager handles it for you in both cases.
+
+**At creation time**: When asking Manager to create a Worker, specify the model name directly, e.g. "Create a Worker named alice using `qwen3.5-plus`."
+
+**After creation**: Tell Manager at any time to switch a Worker's model, e.g. "Switch alice to use `claude-3-5-sonnet`." Manager will update the Worker's configuration accordingly.
+
+Make sure the Higress `default-ai-route` is already configured to route the target model name to the right provider before switching.

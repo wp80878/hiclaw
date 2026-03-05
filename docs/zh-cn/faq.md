@@ -5,6 +5,7 @@
 - [本地访问 Matrix 服务器不通](#本地访问-matrix-服务器不通)
 - [如何主动指挥 Worker](#如何主动指挥-worker)
 - [如何切换 Manager 的模型](#如何切换-manager-的模型)
+- [如何切换 Worker 的模型](#如何切换-worker-的模型)
 
 ---
 
@@ -83,3 +84,15 @@ http://<局域网IP>:18080
 **多供应商情况**
 
 在 Higress 控制台，对 `default-ai-route` 路由按模型名前缀或正则表达式配置不同的供应商。之后的流程与单供应商完全一致——告诉 Manager 模型名，它会自动完成测试和切换。
+
+---
+
+## 如何切换 Worker 的模型
+
+流程与切换 Manager 模型类似，两种情况都由 Manager 代为操作。
+
+**创建时指定**：在让 Manager 创建 Worker 时直接说明模型，例如"帮我创建一个名为 alice 的 Worker，使用 `qwen3.5-plus`"。
+
+**创建后修改**：随时告诉 Manager 切换某个 Worker 的模型，例如"把 alice 的模型切换为 `claude-3-5-sonnet`"，Manager 会自动更新该 Worker 的配置。
+
+切换前请确保 Higress 的 `default-ai-route` 已配置好目标模型名到对应供应商的路由。
