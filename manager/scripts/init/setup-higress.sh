@@ -194,16 +194,35 @@ if [ -n "${HICLAW_LLM_API_KEY}" ]; then
     # 5b. Create or update AI Gateway Route (GET → PUT if exists, POST if not)
     AI_ROUTE_BODY='{"name":"default-ai-route","domains":["'"${AI_GATEWAY_DOMAIN}"'"],"pathPredicate":{"matchType":"PRE","matchValue":"/","caseSensitive":false},"upstreams":[{"provider":"'"${LLM_PROVIDER}"'","weight":100,"modelMapping":{}}],"authConfig":{"enabled":true,"allowedCredentialTypes":["key-auth"],"allowedConsumers":["manager"]}}'
 
+    HICLAW_VERSION=$(cat /opt/hiclaw/agent/.builtin-version 2>/dev/null | tr -d '[:space:]')
+    HICLAW_VERSION="${HICLAW_VERSION:-latest}"
+
     existing_route_resp=$(higress_get /v1/ai/routes/default-ai-route)
     if [ -n "${existing_route_resp}" ]; then
-        # Extract the AiRoute object from the response wrapper (.data), then patch upstreams[0].provider.
+        # Extract the AiRoute object from the response wrapper (.data), then patch:
+        #   - upstreams[0].provider: reflect current LLM provider
+        #   - headerControl.request.add: inject User-Agent header (add = set if absent, don't overwrite)
         # Preserve all other fields (especially authConfig.allowedConsumers and version).
-        patched=$(echo "${existing_route_resp}" | jq '.data | .upstreams[0].provider = "'"${LLM_PROVIDER}"'"' 2>/dev/null)
+        patched=$(echo "${existing_route_resp}" | jq '
+            .data
+            | .upstreams[0].provider = "'"${LLM_PROVIDER}"'"
+            | .headerControl.enabled = true
+            | .headerControl.request.add = [{"key":"user-agent","value":"HiClaw/'"${HICLAW_VERSION}"'"}]
+            | .headerControl.request.set  //= []
+            | .headerControl.request.remove //= []
+            | .headerControl.response.add //= []
+            | .headerControl.response.set //= []
+            | .headerControl.response.remove //= []
+        ' 2>/dev/null)
         if [ -n "${patched}" ] && [ "${patched}" != "null" ]; then
-            higress_api PUT /v1/ai/routes/default-ai-route "Updating AI Gateway route (provider=${LLM_PROVIDER})" "${patched}"
+            higress_api PUT /v1/ai/routes/default-ai-route "Updating AI Gateway route (provider=${LLM_PROVIDER}, User-Agent=HiClaw/${HICLAW_VERSION})" "${patched}"
         fi
     else
-        higress_api POST /v1/ai/routes "Creating AI Gateway route (provider=${LLM_PROVIDER})" "${AI_ROUTE_BODY}"
+        # Inject headerControl into the initial route body
+        AI_ROUTE_BODY=$(echo "${AI_ROUTE_BODY}" | jq '
+            . + {"headerControl":{"enabled":true,"request":{"add":[{"key":"user-agent","value":"HiClaw/'"${HICLAW_VERSION}"'"}],"set":[],"remove":[]},"response":{"add":[],"set":[],"remove":[]}}}
+        ' 2>/dev/null)
+        higress_api POST /v1/ai/routes "Creating AI Gateway route (provider=${LLM_PROVIDER}, User-Agent=HiClaw/${HICLAW_VERSION})" "${AI_ROUTE_BODY}"
     fi
 
 else

@@ -713,7 +713,7 @@ function Test-LlmConnectivity {
     } | ConvertTo-Json -Compress
     try {
         $response = Invoke-WebRequest -Uri $uri -Method POST `
-            -Headers @{ "Authorization" = "Bearer $ApiKey"; "Content-Type" = "application/json" } `
+            -Headers @{ "Authorization" = "Bearer $ApiKey"; "Content-Type" = "application/json"; "User-Agent" = "HiClaw/$($script:HICLAW_VERSION)" } `
             -Body $body -TimeoutSec 30 -ErrorAction Stop -UseBasicParsing
         Write-Log (Get-Msg "llm.openai.test.ok")
     } catch {

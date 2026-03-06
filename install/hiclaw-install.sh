@@ -1755,6 +1755,7 @@ test_llm_connectivity() {
         -X POST "${base_url%/}/chat/completions" \
         -H "Authorization: Bearer ${api_key}" \
         -H "Content-Type: application/json" \
+        -H "User-Agent: HiClaw/${HICLAW_VERSION:-latest}" \
         --max-time 30 \
         -d "{\"model\":\"${model}\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}" \
         2>/dev/null)
