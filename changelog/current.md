@@ -21,4 +21,6 @@ Record image-affecting changes to `manager/`, `worker/`, `openclaw-base/` here b
 - docs(manager): add "Using MCP Tools via mcporter" section to mcp-server-management SKILL.md — document Manager's own mcporter usage (list servers, view schemas, call tools)
 - feat(manager): extract mcporter into standalone skill for both Manager (`manager/agent/skills/mcporter/`) and Worker (`manager/agent/worker-skills/mcporter/`); Worker skill includes MCP tool discovery and skill generation workflow
 - refactor(manager,worker): move mcporter config to `./config/mcporter.json` (mcporter default path, no `--config` needed); symlink at old `mcporter-servers.json` path for backward compatibility; remove `MCPORTER_CONFIG` env var dependency from all SKILL.md files
+- fix(copaw): update FileSync to pull `config/mcporter.json` from MinIO (was still using old `mcporter-servers.json` path); exclude new path from push_local
+- fix(copaw): copy mcporter config from workspace root into COPAW_WORKING_DIR (`.copaw/config/mcporter.json`) so mcporter finds it at default path; auto-update on file-sync pull
 

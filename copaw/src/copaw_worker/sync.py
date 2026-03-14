@@ -177,7 +177,7 @@ class FileSync:
         # Manager-managed files (allowlist)
         files = {
             "openclaw.json": f"{self._prefix}/openclaw.json",
-            "mcporter-servers.json": f"{self._prefix}/mcporter-servers.json",
+            "config/mcporter.json": f"{self._prefix}/config/mcporter.json",
         }
         for name, key in files.items():
             content = self._cat(key)
@@ -236,10 +236,14 @@ def push_local(sync: FileSync, since: float = 0) -> list[str]:
     Excludes Manager-managed files only. AGENTS.md, SOUL.md, .copaw/sessions/
     are Worker-managed and are pushed (including session backup).
     """
-    # Manager-managed files that should never be pushed back (workspace root)
+    # Manager-managed files that should never be pushed back
     _EXCLUDE_FILES = {
         "openclaw.json",
         "mcporter-servers.json",
+    }
+    # Manager-managed files at specific relative paths (not just root)
+    _EXCLUDE_PATHS = {
+        "config/mcporter.json",
     }
     # Directory name components to skip anywhere in the tree
     _EXCLUDE_DIRS = {
@@ -260,6 +264,7 @@ def push_local(sync: FileSync, since: float = 0) -> list[str]:
         "providers.json",
         "SOUL.md",
         "AGENTS.md",
+        "mcporter.json",
     }
 
     pushed: list[str] = []
@@ -281,6 +286,9 @@ def push_local(sync: FileSync, since: float = 0) -> list[str]:
         rel = path.relative_to(local_dir)
         # Skip Manager-owned config files at workspace root
         if len(rel.parts) == 1 and rel.name in _EXCLUDE_FILES:
+            continue
+        # Skip Manager-owned config files at specific paths
+        if rel.as_posix() in _EXCLUDE_PATHS:
             continue
         # Skip excluded directory trees
         if any(p in _EXCLUDE_DIRS for p in rel.parts):

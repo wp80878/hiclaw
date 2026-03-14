@@ -123,13 +123,17 @@ class Worker:
             console.print(f"[red]Config bridge failed: {exc}[/red]")
             return False
 
-        # 5. Install MatrixChannel into CoPaw's custom_channels dir
+        # 5. Copy mcporter config into CoPaw working dir so mcporter finds
+        #    ./config/mcporter.json when running from COPAW_WORKING_DIR
+        self._copy_mcporter_config()
+
+        # 6. Install MatrixChannel into CoPaw's custom_channels dir
         self._install_matrix_channel()
 
-        # 6. Sync skills from MinIO into CoPaw's active_skills dir
+        # 7. Sync skills from MinIO into CoPaw's active_skills dir
         self._sync_skills()
 
-        # 7. Start background MinIO sync
+        # 8. Start background MinIO sync
         asyncio.create_task(
             sync_loop(
                 self.sync,
@@ -339,6 +343,25 @@ class Worker:
         logger.debug("MatrixChannel installed to %s", dst)
 
     # ------------------------------------------------------------------
+    # mcporter config
+    # ------------------------------------------------------------------
+
+    def _copy_mcporter_config(self) -> None:
+        """Copy mcporter config from workspace root into CoPaw working dir.
+
+        pull_all writes to <local_dir>/config/mcporter.json (workspace root),
+        but mcporter looks for ./config/mcporter.json relative to cwd, which
+        is COPAW_WORKING_DIR (.copaw/). Copy it there so mcporter finds it.
+        """
+        src = self.sync.local_dir / "config" / "mcporter.json"
+        if not src.exists():
+            return
+        dst = self._copaw_working_dir / "config" / "mcporter.json"
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        logger.info("mcporter config copied to %s", dst)
+
+    # ------------------------------------------------------------------
     # File sync callback
     # ------------------------------------------------------------------
 
@@ -348,6 +371,10 @@ class Worker:
         # Re-sync skills if any skill file changed
         if any(f.startswith("skills/") for f in pulled_files):
             self._sync_skills()
+
+        # Copy mcporter config into CoPaw working dir when it changes
+        if "config/mcporter.json" in pulled_files:
+            self._copy_mcporter_config()
 
         needs_rebridge = "openclaw.json" in pulled_files
         if not needs_rebridge:
